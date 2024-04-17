@@ -1145,6 +1145,21 @@ function _getInternalBalance(address account, IERC20 token) internal view return
 ```
 
 ## AssetTransfersHandler Contract
+In the balancer v2 protocol, the assetTransferHandler contract provides the necessary logic for depositing and withdrawing tokens from a Managed Pool
+
+```
+import "@balancer-labs/v2-interfaces/contracts/solidity-utils/helpers/BalancerErrors.sol";
+import "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
+import "@balancer-labs/v2-interfaces/contracts/solidity-utils/misc/IWETH.sol";
+import "@balancer-labs/v2-interfaces/contracts/vault/IAsset.sol";
+import "@balancer-labs/v2-interfaces/contracts/vault/IVault.sol";
+
+import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
+import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/Address.sol";
+import "@balancer-labs/v2-solidity-utils/contracts/math/Math.sol";
+
+import "./AssetHelpers.sol";
+```
 `_receiveAsset` function receives `amount` of `asset` from `sender`. If `fromInternalBalance` is true, it first withdraws as much as possible from Internal Balance, then transfers any remaining amount.
 
 If `asset` is ETH, `fromInternalBalance` must be false (as ETH cannot be held as internal balance), and the funds will be wrapped into WETH.
@@ -1224,23 +1239,49 @@ If `asset` is ETH, `toInternalBalance` must be false (as ETH cannot be held as i
     }
 ```
 
+In the balancer v2 protocol, the assetHandler contract provides the necessary logic for depositing and withdrawing tokens from a Managed Pool
+
+The function _handleremainingEth handles the returns of excess ETH back to the contract caller, assuming `amountUsed` has been spent. 
+
+Reverts if the caller sent less ETH than `amountUsed`.
 ```
-import "@balancer-labs/v2-interfaces/contracts/solidity-utils/helpers/BalancerErrors.sol";
+
+function _handleRemainingEth(uint256 amountUsed) internal {
+    _require(msg.value >= amountUsed, Errors.INSUFFICIENT_ETH);
+
+    uint256 excess = msg.value - amountUsed;
+    if (excess > 0) {
+        msg.sender.sendValue(excess);
+    }
+    }
+```
+## AssetHelpers contract
+This contract provides utility functions for handling different types of assets within the Balancer V2 ecosystem. 
+
+`AssetHelpers` contract provides convenient functions for working with assets, including identifying ETH, translating assets into ERC20 token addresses, and interpreting assets as ERC20 tokens. 
+
+This helper has the following import:
+```
 import "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
 import "@balancer-labs/v2-interfaces/contracts/solidity-utils/misc/IWETH.sol";
 import "@balancer-labs/v2-interfaces/contracts/vault/IAsset.sol";
-import "@balancer-labs/v2-interfaces/contracts/vault/IVault.sol";
-
-import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
-import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/Address.sol";
-import "@balancer-labs/v2-solidity-utils/contracts/math/Math.sol";
-
-import "./AssetHelpers.sol";
 ```
+Some notable functions associated with the AssetHelper contract include:
 
+`_isETH(IAsset asset)`:
+Determines whether an asset is ETH by comparing its address to a sentinel value (_ETH).
+Returns true if the asset is ETH, false otherwise.
 
+`_translateToIERC20(IAsset asset)`:
+Translates an asset into an equivalent ERC20 token address.
+If the asset represents ETH, it returns the address of the WETH contract.
+Otherwise, it returns the asset address directly.
 
+`_translateToIERC20(IAsset[] memory assets)`:
+Applies the _translateToIERC20 function to each element of an array of assets.
+Returns an array of equivalent ERC20 token addresses.
 
-
-
-
+`_asIERC20(IAsset asset)`:
+Interprets an asset as an ERC20 token.
+This function should only be called on an asset if _isETH previously returned false for it, indicating that the asset is not the ETH sentinel value.
+Casts the asset to an IERC20 interface.
